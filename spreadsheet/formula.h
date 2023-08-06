@@ -2,6 +2,8 @@
 
 #include "common.h"
 
+#include "FormulaAST.h"
+
 #include <memory>
 #include <vector>
 
