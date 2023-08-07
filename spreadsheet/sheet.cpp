@@ -40,25 +40,27 @@ Size Sheet::GetPrintableSize() const {
 }
 
 void Sheet::PrintValues(std::ostream& output) const {
-	for (int row = 0; row < GetPrintableSize().rows; ++row) {
-		for (int col = 0; col < GetPrintableSize().cols; ++col) {
-			if (col > 0) { output << '\t'; }
-			auto cell = GetCell({ row,col });
-			if (cell != nullptr) {
-				std::visit([&](const auto& value) { output << value; }, cell->GetValue());
-			}
-		}
-		output << '\n';
-	}
+	auto prnt = [&](const CellInterface* cell) {
+		std::visit([&](const auto& value) { output << value; }, cell->GetValue());
+	};
+	PrintCell(output, prnt);
 }
 
 void Sheet::PrintTexts(std::ostream& output) const {
-	for (int row = 0; row < GetPrintableSize().rows; ++row) {
-		for (int col = 0; col < GetPrintableSize().cols; ++col) {
+	auto prnt = [&](const CellInterface* cell) {
+		output << cell->GetText();
+	};
+	PrintCell(output, prnt);
+}
+
+void Sheet::PrintCell(std::ostream& output, std::function<void(const CellInterface*)> prnt) const
+{
+	for (int row = 0; row < size_.rows; ++row) {
+		for (int col = 0; col < size_.cols; ++col) {
 			if (col > 0) { output << '\t'; }
 			auto cell = GetCell({ row,col });
 			if (cell != nullptr) {
-				output << cell->GetText();
+				prnt(cell);
 			}
 		}
 		output << '\n';

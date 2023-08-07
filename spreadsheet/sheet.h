@@ -18,6 +18,7 @@ public:
 
 private:
 	CellInterface* CheckAndGetCell(const Position& pos) const;
+	void PrintCell(std::ostream& output, std::function<void(const CellInterface*)> prnt) const;
 
 	struct Position_hasher {
 		size_t operator() (const Position& position) const;
