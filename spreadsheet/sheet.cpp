@@ -24,6 +24,7 @@ const CellInterface* Sheet::GetCell(Position pos) const {
 
 void Sheet::ClearCell(Position pos) {
 	if (GetCell(pos) != nullptr) {
+		sheet_cells_map[pos]->Clear();
 		sheet_cells_map.erase(pos);
 
 		int maxcolls = 0, maxrows = 0;

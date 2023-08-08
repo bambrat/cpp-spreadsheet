@@ -7,7 +7,7 @@ class Sheet;
 
 class Cell : public CellInterface {
 public:
-	Cell(Sheet& sheet);
+	explicit Cell(Sheet& sheet);
 	~Cell();
 
 	void Set(std::string text);
@@ -26,9 +26,10 @@ private:
 
 	void CheckCircularDependency(const std::vector <Position> cells) const;
 	void CacheInvalidate();
+	void ClearDepCells();
 
 	std::unique_ptr<Impl> impl_;
 	Sheet& sheet_;
-
+	mutable bool check_cell_ = false;
 	std::unordered_set<Cell*> dependent_cells_;
 };

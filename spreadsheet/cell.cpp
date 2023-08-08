@@ -10,6 +10,7 @@ public:
 	virtual std::string GetText() const = 0;
 	virtual std::vector<Position> GetReferencedCells() const { return {}; }
 	virtual void CacheInvalidate() {}
+	virtual bool HaveCache() { return true; }
 };
 
 class Cell::EmptyImpl : public Impl {
@@ -44,7 +45,6 @@ private:
 	std::string text_;
 };
 
-
 class Cell::FormulaImpl : public Impl {
 public:
 	explicit FormulaImpl(std::string expression, const SheetInterface& sheet) : sheet_(sheet) {
@@ -68,6 +68,10 @@ public:
 		cache_.reset();
 	}
 
+	bool HaveCache() override {
+		return cache_.has_value();
+	}
+
 private:
 	mutable std::optional<FormulaInterface::Value> cache_;
 	std::unique_ptr<FormulaInterface> formula_ptr_;
@@ -79,53 +83,70 @@ Cell::Cell(Sheet& sheet) :impl_(std::make_unique<EmptyImpl>()), sheet_(sheet) {}
 Cell::~Cell() {}
 
 void Cell::Set(std::string text) {
-	if (text.empty()) {
-		impl_ = std::make_unique<EmptyImpl>();
-	}
-	else if (text.size() > 1 && text[0] == FORMULA_SIGN) {
-		std::unique_ptr<Impl> impl = std::make_unique<FormulaImpl>(std::move(text), sheet_);
-
-		CheckCircularDependency(impl->GetReferencedCells());
-
-		impl_ = std::move(impl);
-
-		for (const auto& pos : impl_->GetReferencedCells()) {
-			Cell* cell = static_cast<Cell*>(sheet_.GetCell(pos));
-			if (cell == nullptr) {
-				sheet_.SetCell(pos, "");
-				cell = static_cast<Cell*>(sheet_.GetCell(pos));
-			}
-			cell->dependent_cells_.insert(this);
+	if (text != GetText()) {
+		if (text.empty()) {
+			ClearDepCells();
+			impl_ = std::make_unique<EmptyImpl>();
 		}
+		else if (text.size() > 1 && text[0] == FORMULA_SIGN) {
+			std::unique_ptr<Impl> impl = std::make_unique<FormulaImpl>(std::move(text), sheet_);
+
+			CheckCircularDependency(impl->GetReferencedCells());
+			ClearDepCells();
+			impl_ = std::move(impl);
+
+			for (const auto& pos : impl_->GetReferencedCells()) {
+				Cell* cell = static_cast<Cell*>(sheet_.GetCell(pos));
+				if (cell == nullptr) {
+					sheet_.SetCell(pos, "");
+					cell = static_cast<Cell*>(sheet_.GetCell(pos));
+				}
+				cell->dependent_cells_.insert(this);
+			}
+		}
+		else {
+			ClearDepCells();
+			impl_ = std::make_unique<TextImpl>(std::move(text));
+		}
+		CacheInvalidate();
 	}
-	else {
-		impl_ = std::make_unique<TextImpl>(std::move(text));
-	}
-	CacheInvalidate();
 }
 
 void Cell::CacheInvalidate() {
-	impl_->CacheInvalidate();
+	if (impl_->HaveCache() || !check_cell_) {
+		check_cell_ = true;
 
-	for (Cell* cell : dependent_cells_) {
-		cell->CacheInvalidate();
+		impl_->CacheInvalidate();
+		for (auto cell : dependent_cells_) {
+			cell->CacheInvalidate();
+		}
 	}
+	check_cell_ = false;
+}
+
+void Cell::ClearDepCells()
+{
+	dependent_cells_.clear();
 }
 
 void Cell::CheckCircularDependency(const std::vector <Position> cells) const {
 	for (const Position& position : cells) {
-		auto check_cell = sheet_.GetCell(position);
-		if (check_cell) {
-			if (check_cell == this) {
-				throw CircularDependencyException("Circular Dependency Exception [" + check_cell->GetText() + "]");
+		auto cell = sheet_.GetCell(position);
+		if (cell && !check_cell_) {
+
+			if (cell == this) {
+				throw CircularDependencyException("Circular Dependency Exception [" + cell->GetText() + "]");
 			}
-			CheckCircularDependency(check_cell->GetReferencedCells());
+
+			CheckCircularDependency(cell->GetReferencedCells());
+			check_cell_ = true;
 		}
 	}
+	check_cell_ = false;
 }
 
 void Cell::Clear() {
-	impl_ = std::make_unique<EmptyImpl>();
+	Set("");
 }
 
 Cell::Value Cell::GetValue() const {
