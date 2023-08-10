@@ -134,7 +134,7 @@ void Cell::CacheInvalidate(bool force = false) {
 	}
 }
 
-void Cell::CheckCircularDependency(std::vector<Position> cells) {
+void Cell::CheckCircularDependency(std::vector<Position> cells) const {
 	if (cells.empty()) { return; }
 
 	std::unordered_set<const CellInterface*> refs;

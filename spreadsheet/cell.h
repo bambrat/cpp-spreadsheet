@@ -25,7 +25,7 @@ private:
 	class TextImpl;
 	class FormulaImpl;
 
-	void CheckCircularDependency(std::vector<Position> cells);
+	void CheckCircularDependency(std::vector<Position> cells) const;
 	void CacheInvalidate(bool force);
 	void ClearDepCells();
 	void FillDepCells();
