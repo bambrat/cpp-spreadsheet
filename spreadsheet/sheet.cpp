@@ -25,7 +25,10 @@ const CellInterface* Sheet::GetCell(Position pos) const {
 void Sheet::ClearCell(Position pos) {
 	if (GetCell(pos) != nullptr) {
 		sheet_cells_map[pos]->Clear();
-		sheet_cells_map.erase(pos);
+
+		if (!sheet_cells_map[pos]->IsUsed()) {
+			sheet_cells_map.erase(pos);
+		}
 
 		int maxcolls = 0, maxrows = 0;
 		for (const auto& [key, _] : sheet_cells_map) {
@@ -70,7 +73,7 @@ void Sheet::PrintCell(std::ostream& output, std::function<void(const CellInterfa
 
 std::unique_ptr<SheetInterface> CreateSheet() { return std::make_unique<Sheet>(); }
 
-CellInterface* Sheet::CheckAndGetCell(const Position& pos) const
+CellInterface* Sheet::CheckAndGetCell(Position& pos) const
 {
 	using namespace std::literals;
 	if (!pos.IsValid()) {

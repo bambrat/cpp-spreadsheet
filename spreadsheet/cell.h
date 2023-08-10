@@ -12,6 +12,7 @@ public:
 
 	void Set(std::string text);
 	void Clear();
+	bool IsUsed();
 
 	Value GetValue() const override;
 	std::string GetText() const override;
@@ -24,12 +25,12 @@ private:
 	class TextImpl;
 	class FormulaImpl;
 
-	void CheckCircularDependency(const std::vector <Position> cells) const;
-	void CacheInvalidate();
+	void CheckCircularDependency(std::vector<Position> cells);
+	void CacheInvalidate(bool force);
 	void ClearDepCells();
+	void FillDepCells();
 
 	std::unique_ptr<Impl> impl_;
 	Sheet& sheet_;
-	mutable bool check_cell_ = false;
 	std::unordered_set<Cell*> dependent_cells_;
 };

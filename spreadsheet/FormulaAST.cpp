@@ -153,10 +153,11 @@ namespace ASTImpl {
                     result = lhs_->Evaluate(args) * rhs_->Evaluate(args);
                     break;
                 case Divide:
-                    if (rhs_->Evaluate(args) == 0) {
+                    auto check_rhs_ = rhs_->Evaluate(args);
+                    if (check_rhs_ == 0) {
                         throw FormulaError{ FormulaError::Category::Div0 };
                     }
-                    result = lhs_->Evaluate(args) / rhs_->Evaluate(args);
+                    result = lhs_->Evaluate(args) / check_rhs_;
                     break;
                 }
                 if (std::isinf(result)) {

@@ -17,7 +17,7 @@ public:
 	void PrintTexts(std::ostream& output) const override;
 
 private:
-	CellInterface* CheckAndGetCell(const Position& pos) const;
+	CellInterface* CheckAndGetCell(Position& pos) const;
 	void PrintCell(std::ostream& output, std::function<void(const CellInterface*)> prnt) const;
 
 	struct Position_hasher {

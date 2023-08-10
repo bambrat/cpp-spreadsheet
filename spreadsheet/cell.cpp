@@ -52,7 +52,9 @@ public:
 	}
 
 	Value GetValue() const override {
-		if (!cache_) { cache_ = formula_ptr_->Evaluate(sheet_); }
+		if (!cache_.has_value()) { 
+			cache_ = formula_ptr_->Evaluate(sheet_); 
+		}
 		return std::visit([](auto& arg) -> Value {return arg; }, *cache_);
 	}
 
@@ -83,70 +85,94 @@ Cell::Cell(Sheet& sheet) :impl_(std::make_unique<EmptyImpl>()), sheet_(sheet) {}
 Cell::~Cell() {}
 
 void Cell::Set(std::string text) {
-	if (text != GetText()) {
-		if (text.empty()) {
-			ClearDepCells();
-			impl_ = std::make_unique<EmptyImpl>();
-		}
-		else if (text.size() > 1 && text[0] == FORMULA_SIGN) {
-			std::unique_ptr<Impl> impl = std::make_unique<FormulaImpl>(std::move(text), sheet_);
+	if (text == GetText()) { return; }
 
-			CheckCircularDependency(impl->GetReferencedCells());
-			ClearDepCells();
-			impl_ = std::move(impl);
-
-			for (const auto& pos : impl_->GetReferencedCells()) {
-				Cell* cell = static_cast<Cell*>(sheet_.GetCell(pos));
-				if (cell == nullptr) {
-					sheet_.SetCell(pos, "");
-					cell = static_cast<Cell*>(sheet_.GetCell(pos));
-				}
-				cell->dependent_cells_.insert(this);
-			}
-		}
-		else {
-			ClearDepCells();
-			impl_ = std::make_unique<TextImpl>(std::move(text));
-		}
-		CacheInvalidate();
+	std::unique_ptr<Impl> impl;
+	if (text.empty()) {
+		impl = std::make_unique<EmptyImpl>();
 	}
+	else if (text.size() > 1 && text[0] == FORMULA_SIGN) {
+		impl = std::make_unique<FormulaImpl>(std::move(text), sheet_);
+		CheckCircularDependency(impl->GetReferencedCells());
+	}
+	else {
+		impl = std::make_unique<TextImpl>(std::move(text));
+	}
+	
+	ClearDepCells();
+	impl_ = std::move(impl);
+	FillDepCells();
+	CacheInvalidate(true);
 }
 
-void Cell::CacheInvalidate() {
-	if (impl_->HaveCache() || !check_cell_) {
-		check_cell_ = true;
-
-		impl_->CacheInvalidate();
-		for (auto cell : dependent_cells_) {
-			cell->CacheInvalidate();
+void Cell::FillDepCells()
+{
+	for (const auto& pos : impl_->GetReferencedCells()) {
+		Cell* cell = static_cast<Cell*>(sheet_.GetCell(pos));
+		if (cell == nullptr) {
+			sheet_.SetCell(pos, "");
+			cell = static_cast<Cell*>(sheet_.GetCell(pos));
 		}
+		cell->dependent_cells_.insert(this);
 	}
-	check_cell_ = false;
 }
 
 void Cell::ClearDepCells()
 {
-	dependent_cells_.clear();
+	for (const auto& pos : impl_->GetReferencedCells()) {
+		Cell* cell = static_cast<Cell*>(sheet_.GetCell(pos));
+		cell->dependent_cells_.erase(this);
+	}
 }
 
-void Cell::CheckCircularDependency(const std::vector <Position> cells) const {
-	for (const Position& position : cells) {
-		auto cell = sheet_.GetCell(position);
-		if (cell && !check_cell_) {
-
-			if (cell == this) {
-				throw CircularDependencyException("Circular Dependency Exception [" + cell->GetText() + "]");
-			}
-
-			CheckCircularDependency(cell->GetReferencedCells());
-			check_cell_ = true;
+void Cell::CacheInvalidate(bool force = false) {
+	if (impl_->HaveCache() || force) {
+		impl_->CacheInvalidate();
+		for (Cell* dependent : dependent_cells_) {
+			dependent->CacheInvalidate();
 		}
 	}
-	check_cell_ = false;
+}
+
+void Cell::CheckCircularDependency(std::vector<Position> cells) {
+	if (cells.empty()) { return; }
+
+	std::unordered_set<const CellInterface*> refs;
+	for (const auto& pos : cells) {
+		refs.insert(sheet_.GetCell(pos));
+	}
+
+	std::unordered_set<const CellInterface*> checked;
+	std::stack<const CellInterface*> for_check;
+	for_check.push(this);
+
+	while (!for_check.empty()) {
+		auto current = for_check.top();
+		for_check.pop();
+
+		if (refs.find(current) != refs.end()) {
+			throw CircularDependencyException("Circular Dependency Exception");
+		}
+
+		checked.insert(current);
+		auto& ref_cells = static_cast<const Cell*>(current)->dependent_cells_;
+		for (auto& check_cell : ref_cells) {
+			if (checked.find(check_cell) == checked.end()) {
+				for_check.push(check_cell);
+			}
+		}
+	};
 }
 
 void Cell::Clear() {
-	Set("");
+	CacheInvalidate();
+	ClearDepCells();
+	impl_ = std::make_unique<EmptyImpl>();
+}
+
+bool Cell::IsUsed()
+{
+	return !dependent_cells_.empty();
 }
 
 Cell::Value Cell::GetValue() const {
